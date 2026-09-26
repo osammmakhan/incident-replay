@@ -16,6 +16,7 @@ class TimelineEvent(BaseModel):
     """A single timestamped event in the incident timeline."""
 
     timestamp: str
+    event: str = ""          # Short category label, e.g. "deployment", "first_error"
     description: str
 
 
