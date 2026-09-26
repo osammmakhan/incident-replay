@@ -23,8 +23,9 @@ class Evidence(BaseModel):
     """A piece of supporting evidence collected during analysis."""
 
     source: Literal["log", "git", "code", "test"]
-    description: str
-    detail: str = ""
+    location: str
+    observation: str
+    relevance: str
 
 
 class RegressionTest(BaseModel):
