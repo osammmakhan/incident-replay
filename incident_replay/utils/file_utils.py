@@ -62,7 +62,7 @@ def read_file(path: str) -> str:
     if not os.path.isfile(path):
         raise FileReadError(f"Path is not a regular file: {path!r}")
     try:
-        with open(path, encoding="utf-8", errors="replace") as fh:
+        with open(path, encoding="utf-8-sig", errors="replace") as fh:
             return fh.read().replace("\r\n", "\n").replace("\r", "\n")
     except OSError as exc:
         raise FileReadError(f"Cannot read {path!r}: {exc}") from exc
