@@ -384,6 +384,16 @@ def replay_incident(
     _generated_test_path = None
     _project_cwd_for_test = None
 
+    # Pre-restore: revert the affected file to its committed (buggy) state
+    # before the test generator runs so that the before-fix test run sees the
+    # real defect.  Without this, a second pipeline run would find the file
+    # already patched from the previous run, the test would pass immediately,
+    # and _before_fix_failing would be False — preventing the after-fix verify.
+    _affected_for_restore = synthesis_result.affected_files
+    _field_for_restore = _field_token_from_synthesis(synthesis_result)
+    if _affected_for_restore and _field_for_restore and repo_path and repo_path.strip():
+        _git_restore_file(_affected_for_restore[0], repo_path)
+
     gen_output_dir = _regression_test_dir(repo_path)
     if gen_output_dir:
         try:
@@ -524,6 +534,12 @@ def _git_restore_file(file_path: str, repo_root: str) -> None:
     patched the file, this call reverts it so the patcher finds the unguarded
     pattern again.
 
+    The supplied *repo_root* may be a subdirectory inside a larger git
+    repository (e.g. ``tests/demo_project`` lives inside the workspace repo).
+    We discover the actual git root with ``git rev-parse --show-toplevel`` and
+    build the path relative to that, so the checkout command always targets the
+    correct index entry.
+
     Failures are silenced — the patcher's own "pattern not found" logic will
     handle the case where the file cannot be restored.
 
@@ -532,7 +548,7 @@ def _git_restore_file(file_path: str, repo_root: str) -> None:
     file_path:
         Path to the file, resolved relative to *repo_root*.
     repo_root:
-        Root of the git repository.
+        Directory used as the starting point for git discovery.
     """
     import subprocess
     from pathlib import Path as _Path
@@ -541,11 +557,24 @@ def _git_restore_file(file_path: str, repo_root: str) -> None:
         abs_file = _Path(file_path)
         if not abs_file.is_absolute():
             abs_file = (_Path(repo_root) / file_path).resolve()
-        repo = _Path(repo_root).resolve()
-        rel = abs_file.relative_to(repo)
+
+        # Discover the actual git repository root (may be a parent of repo_root).
+        result = subprocess.run(
+            ["git", "rev-parse", "--show-toplevel"],
+            cwd=str(_Path(repo_root).resolve()),
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+        if result.returncode != 0:
+            return  # not in a git repo — silently skip
+        git_root = _Path(result.stdout.strip()).resolve()
+
+        # Path of the file relative to the git root — this is what git indexes.
+        rel = abs_file.relative_to(git_root)
         subprocess.run(
             ["git", "checkout", "HEAD", "--", rel.as_posix()],
-            cwd=str(repo),
+            cwd=str(git_root),
             capture_output=True,
             timeout=10,
         )
@@ -579,7 +608,7 @@ def _make_llm_backend():
     if not api_key:
         return None  # no key → deterministic mode, no network call
 
-    model = os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile").strip()
+    model = os.getenv("GROQ_MODEL", "qwen/qwen3.8-27b").strip()
 
     def _backend(evidence_list, context: dict):
         try:
