@@ -37,15 +37,13 @@ _ALL_WIDGET_KEYS = (
 # Demo incident data (single source of truth)
 DEMO_INCIDENT = {
     "description": "Checkout returns HTTP 500 when discount is null.",
-    "repo_path":   "demo_project/",
-    "log_path":    "demo_project/logs/error.log",
+    "repo_path":   "tests/demo_project",
+    "log_path":    "tests/demo_project/logs/production.log",
     "stack_trace": (
         "Traceback (most recent call last):\n"
-        '  File "api/checkout.py", line 31, in post\n'
-        "    total = apply_discount(cart.total, cart.discount)\n"
-        '  File "payment/discount.py", line 12, in apply_discount\n'
-        "    return total * (1 - discount)\n"
-        "TypeError: unsupported operand type(s) for *: 'float' and 'NoneType'"
+        '  File "app/checkout.py", line 22, in calculate_discount\n'
+        "    discount_rate = max(0.0, min(order.discount, self.MAX_DISCOUNT_RATE))\n"
+        "TypeError: '<' not supported between instances of 'NoneType' and 'float'"
     ),
 }
 
