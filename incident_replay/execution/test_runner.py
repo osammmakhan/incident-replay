@@ -287,11 +287,13 @@ def run_test_file(
         Test failures and collection errors are *not* raised — they are
         captured in ``RunResult.passed = False``.
     """
-    path_str = str(test_path)
+    # Resolve to an absolute path so pytest can find the file regardless of
+    # the subprocess CWD (which may differ from the process CWD).
+    p = Path(test_path).resolve()
+    path_str = str(p)
 
     # Validate that the path exists and is a file before spinning up a
     # subprocess — gives a cleaner error than pytest's collection traceback.
-    p = Path(path_str)
     if not p.exists():
         return RunResult(
             passed=False,
@@ -326,13 +328,23 @@ def run_test_file(
     timed_out: float | None = None
     t_start = time.monotonic()
 
+    # Pass PYTHONIOENCODING so pytest writes UTF-8 regardless of the
+    # platform default (cp1252 on Windows), preventing UnicodeDecodeError
+    # in the subprocess stdout reader thread.
+    import os as _os
+    env = _os.environ.copy()
+    env["PYTHONIOENCODING"] = "utf-8"
+
     try:
         proc = subprocess.run(
             cmd,
             capture_output=True,
             text=True,
+            encoding="utf-8",
+            errors="replace",
             timeout=timeout,
             cwd=cwd_str,
+            env=env,
         )
     except FileNotFoundError as exc:
         raise RunnerError(

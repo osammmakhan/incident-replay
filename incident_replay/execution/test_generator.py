@@ -453,7 +453,7 @@ def generate(
     _validate_syntax(source, label=test_function_name)
 
     # --- 6. Write the file --------------------------------------------------
-    out_dir = Path(output_dir)
+    out_dir = Path(output_dir).resolve()
     out_dir.mkdir(parents=True, exist_ok=True)
     file_name = f"test_regression_{_slugify(field_token)}_{value_slug}.py"
     test_path = out_dir / file_name

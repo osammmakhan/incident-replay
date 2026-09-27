@@ -55,9 +55,12 @@ DEMO_PROJECT = _HERE / "demo_project"
 DEMO_LOG = DEMO_PROJECT / "logs" / "production.log"
 DEMO_STACK = DEMO_PROJECT / "incident" / "stacktrace.txt"
 DEMO_REPO = DEMO_PROJECT
+# demo_project lives inside the main repo — check the workspace root for .git,
+# not DEMO_PROJECT itself (it is not a standalone repository).
+_WORKSPACE_ROOT = _HERE.parent
 DEMO_AVAILABLE = (
     DEMO_LOG.is_file()
-    and (DEMO_PROJECT / ".git").is_dir()
+    and (_WORKSPACE_ROOT / ".git").is_dir()
     and (DEMO_PROJECT / "tests").is_dir()
 )
 
@@ -323,7 +326,10 @@ def _restore_buggy_checkout() -> None:
     """
     Ensure checkout.py contains the unguarded buggy line.
 
-    Tries ``git checkout HEAD -- app/checkout.py`` first (idempotent, fast).
+    demo_project is not a standalone git repository — it lives inside the
+    main repo.  We therefore run ``git checkout HEAD`` from the workspace
+    root, passing the full path relative to that root.
+
     Falls back to a direct write so the test never silently skips.
     """
     if not _CHECKOUT_PY.exists():
@@ -332,10 +338,11 @@ def _restore_buggy_checkout() -> None:
     if _BUGGY_LINE in current:
         return  # already buggy — nothing to do
 
-    # Try git first (preserves history-friendly state).
+    # Path relative to the workspace (main repo) root.
+    rel_path = _CHECKOUT_PY.relative_to(_WORKSPACE_ROOT).as_posix()
     result = subprocess.run(
-        ["git", "checkout", "HEAD", "--", "app/checkout.py"],
-        cwd=str(DEMO_PROJECT),
+        ["git", "checkout", "HEAD", "--", rel_path],
+        cwd=str(_WORKSPACE_ROOT),
         capture_output=True,
     )
     if result.returncode == 0 and _BUGGY_LINE in _CHECKOUT_PY.read_text(encoding="utf-8"):
@@ -343,7 +350,8 @@ def _restore_buggy_checkout() -> None:
 
     # Fall back: rewrite the file directly so tests are never silently broken.
     _CHECKOUT_PY.write_text(
-        '"""\nDemo checkout module with a deliberate null-safety bug.\n\n'
+        '"""\n'
+        "Demo checkout module with a deliberate null-safety bug.\n\n"
         "The bug: ``calculate_discount`` calls ``min(order.discount, ...)`` without\n"
         "checking whether ``order.discount`` is ``None``.  When a customer omits the\n"
         "discount field, the request fails with::\n\n"

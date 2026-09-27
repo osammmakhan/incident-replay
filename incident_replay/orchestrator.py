@@ -424,6 +424,13 @@ def replay_incident(
     field_token = _field_token_from_synthesis(synthesis_result)
 
     if affected_files and field_token and repo_path and repo_path.strip():
+        # Restore the target file to its committed (pre-fix) state so that
+        # repeated pipeline runs are idempotent.  If the file was already
+        # patched by a previous run, the patcher would report "pattern not
+        # found" and set verification_result.passed=False, which would be
+        # a false negative.  The git restore is a silent best-effort; if it
+        # fails (no git, no commit) the patcher's own logic handles it.
+        _git_restore_file(affected_files[0], repo_path)
         patch_result = patcher.apply_null_guard(
             file_path=affected_files[0],
             field_token=field_token,
@@ -507,6 +514,43 @@ def replay_incident(
 # ---------------------------------------------------------------------------
 # Internal helpers
 # ---------------------------------------------------------------------------
+
+def _git_restore_file(file_path: str, repo_root: str) -> None:
+    """
+    Restore *file_path* to its HEAD-committed state using ``git checkout``.
+
+    This makes repeated pipeline runs idempotent: if a previous run already
+    patched the file, this call reverts it so the patcher finds the unguarded
+    pattern again.
+
+    Failures are silenced — the patcher's own "pattern not found" logic will
+    handle the case where the file cannot be restored.
+
+    Parameters
+    ----------
+    file_path:
+        Path to the file, resolved relative to *repo_root*.
+    repo_root:
+        Root of the git repository.
+    """
+    import subprocess
+    from pathlib import Path as _Path
+
+    try:
+        abs_file = _Path(file_path)
+        if not abs_file.is_absolute():
+            abs_file = (_Path(repo_root) / file_path).resolve()
+        repo = _Path(repo_root).resolve()
+        rel = abs_file.relative_to(repo)
+        subprocess.run(
+            ["git", "checkout", "HEAD", "--", rel.as_posix()],
+            cwd=str(repo),
+            capture_output=True,
+            timeout=10,
+        )
+    except Exception:  # noqa: BLE001
+        pass  # silent — patcher will handle unrestorable state
+
 
 def _format_exc(exc: Exception) -> str:
     """Return a compact one-line error description."""
