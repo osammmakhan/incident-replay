@@ -51,7 +51,7 @@ def get_backend() -> BackendProtocol:
         return _load_mock()
 
     try:
-        from incident_replay.agents.synthesis_agent import replay_incident  # type: ignore[import]
+        from incident_replay.api import replay_incident  # type: ignore[import]
 
         # Verify the module actually defined the function (not just an empty file)
         if callable(replay_incident):
