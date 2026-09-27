@@ -365,6 +365,7 @@ def replay_incident(
             code_findings=code_findings,
             test_findings=test_findings,
             evidence=all_evidence or None,
+            llm_backend=_make_llm_backend(),
         )
     except Exception as exc:  # noqa: BLE001
         reason = _format_exc(exc)
@@ -550,6 +551,92 @@ def _git_restore_file(file_path: str, repo_root: str) -> None:
         )
     except Exception:  # noqa: BLE001
         pass  # silent — patcher will handle unrestorable state
+
+
+def _make_llm_backend():
+    """
+    Return a Groq-backed llm_backend callable when GROQ_API_KEY is set,
+    or ``None`` to keep the fully deterministic pipeline.
+
+    The returned callable is passed to ``synthesis_agent.run()`` as
+    ``llm_backend``.  It receives the structured evidence list and a context
+    dict already assembled by the synthesis stage, so the model is given
+    exactly the facts the deterministic pipeline found — nothing more.
+
+    Model used: ``llama-3.3-70b-versatile`` (fast, free tier available on Groq).
+    Override with the GROQ_MODEL environment variable.
+
+    Safety guarantees (enforced by synthesis_agent, not here):
+    - Every file, function, and commit the model names is checked against
+      supporting evidence; untraceable claims are silently dropped.
+    - Confidence is always computed from evidence alone; the model cannot
+      inflate it.
+    - If the call raises, times out, or returns unusable output, the
+      deterministic hypothesis is used instead.
+    """
+    import os
+    api_key = os.getenv("GROQ_API_KEY", "").strip()
+    if not api_key:
+        return None  # no key → deterministic mode, no network call
+
+    model = os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile").strip()
+
+    def _backend(evidence_list, context: dict):
+        try:
+            from groq import Groq  # type: ignore[import]
+        except ImportError:
+            return None  # groq package not installed → fall back silently
+
+        client = Groq(api_key=api_key)
+
+        evidence_text = "\n".join(
+            f"[{getattr(e, 'source', '?')}] {getattr(e, 'location', '')} — "
+            f"{getattr(e, 'observation', '')}"
+            for e in (evidence_list or [])
+        )
+
+        system_prompt = (
+            "You are a senior reliability engineer performing root-cause analysis.\n"
+            "You will be given structured evidence collected by automated agents "
+            "(log analysis, git history, code inspection, test coverage).\n"
+            "Your job is to write a clear, concise root_cause sentence and identify "
+            "the affected files, functions, and the suspicious commit.\n\n"
+            "Rules:\n"
+            "1. Only name files, functions, and commits that appear in the evidence.\n"
+            "2. The root_cause must start with 'Hypothesis: '.\n"
+            "3. Be specific: name the field, the null/None value, and the code path.\n"
+            "4. Return valid JSON only — no markdown fences, no extra keys."
+        )
+
+        user_prompt = (
+            f"Evidence:\n{evidence_text or '(none)'}\n\n"
+            f"Context:\n"
+            f"  error_signature: {context.get('error_signature', '')}\n"
+            f"  affected_files: {context.get('affected_files', [])}\n"
+            f"  affected_functions: {context.get('affected_functions', [])}\n"
+            f"  suspicious_commit: {context.get('suspicious_commit')}\n"
+            f"  missing_scenarios: {context.get('missing_scenarios', [])}\n\n"
+            "Return a JSON object with exactly these keys:\n"
+            '  "root_cause": "<string starting with Hypothesis:>",\n'
+            '  "affected_files": ["<file>", ...],\n'
+            '  "affected_functions": ["<function>", ...],\n'
+            '  "suspicious_commit": "<sha or null>"\n'
+        )
+
+        import json as _json
+        response = client.chat.completions.create(
+            model=model,
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user",   "content": user_prompt},
+            ],
+            response_format={"type": "json_object"},
+            temperature=0,
+            timeout=30,
+        )
+        return _json.loads(response.choices[0].message.content)
+
+    return _backend
 
 
 def _format_exc(exc: Exception) -> str:

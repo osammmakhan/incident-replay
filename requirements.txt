@@ -1,3 +1,4 @@
 # Python dependencies for Incident Replay
 pydantic>=2.0
 streamlit>=1.35
+groq>=0.9
