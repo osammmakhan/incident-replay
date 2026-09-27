@@ -1,0 +1,9 @@
+# Normalise all text files to LF in the repository.
+# Git will check out with CRLF on Windows (core.autocrlf=true) but store LF.
+* text=auto eol=lf
+
+# Explicitly mark binary files so Git never touches their line endings.
+*.pyc binary
+*.png binary
+*.jpg binary
+*.ico binary

@@ -4,3 +4,5 @@ __pycache__/
 *.pyo
 .pytest_cache/
 .venv/
+# Generated regression tests written by the pipeline at runtime
+tests/demo_project/tests/regression/
