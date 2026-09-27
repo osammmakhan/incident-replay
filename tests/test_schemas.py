@@ -29,10 +29,10 @@ def _minimal_report(**overrides) -> IncidentReport:
         ],
         root_cause="N+1 query introduced in commit abc1234",
         evidence=[
-            Evidence(source="log", description="High DB query count", detail="1000 queries/req"),
-            Evidence(source="git", description="Offending commit", detail="abc1234"),
-            Evidence(source="code", description="Missing eager-load", detail="User.objects.all()"),
-            Evidence(source="test", description="Regression test failure", detail="test_user_list"),
+            Evidence(source="log", location="app/views.py:42", observation="High DB query count", relevance="1000 queries/req indicates N+1"),
+            Evidence(source="git", location="commit abc1234", observation="Offending commit", relevance="Removed eager-load"),
+            Evidence(source="code", location="app/views.py:list_users", observation="Missing eager-load", relevance="User.objects.all() fetches each profile separately"),
+            Evidence(source="test", location="tests/test_views.py:test_user_list", observation="Regression test failure", relevance="Confirms query count regression"),
         ],
         affected_files=["app/views.py"],
         affected_functions=["list_users"],
@@ -72,12 +72,12 @@ class TestConstruction:
 
     def test_evidence_all_sources_accepted(self):
         for src in ("log", "git", "code", "test"):
-            ev = Evidence(source=src, description="ok")
+            ev = Evidence(source=src, location="file.py:1", observation="ok", relevance="relevant")
             assert ev.source == src
 
     def test_evidence_invalid_source_rejected(self):
         with pytest.raises(ValidationError):
-            Evidence(source="network", description="bad source")
+            Evidence(source="network", location="file.py:1", observation="bad source", relevance="none")
 
     def test_regression_test_defaults_language_python(self):
         rt = RegressionTest(name="t", code="pass")
@@ -136,6 +136,7 @@ class TestSerialization:
         data = report.model_dump()
         sources = {ev["source"] for ev in data["evidence"]}
         assert sources == {"log", "git", "code", "test"}
+        assert all("location" in ev and "observation" in ev and "relevance" in ev for ev in data["evidence"])
 
     def test_timeline_order_preserved(self):
         report = _minimal_report()

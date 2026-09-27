@@ -1,0 +1,4 @@
+Traceback (most recent call last):
+  File "app/checkout.py", line 22, in calculate_discount
+    discount_rate = max(0.0, min(order.discount, self.MAX_DISCOUNT_RATE))
+TypeError: '<' not supported between instances of 'NoneType' and 'float'

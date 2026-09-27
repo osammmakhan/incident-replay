@@ -16,6 +16,7 @@ class TimelineEvent(BaseModel):
     """A single timestamped event in the incident timeline."""
 
     timestamp: str
+    event: str = ""          # Short category label, e.g. "deployment", "first_error"
     description: str
 
 
@@ -23,9 +24,9 @@ class Evidence(BaseModel):
     """A piece of supporting evidence collected during analysis."""
 
     source: Literal["log", "git", "code", "test"]
-    location: str # Where in the codebase/log/history (e.g. "app/views.py:42", "commit abc1234")
-    observation: str  # What was found (the raw fact)
-    relevance : str  # Why it matters to the root cause
+    location: str
+    observation: str
+    relevance: str
 
 
 class RegressionTest(BaseModel):

@@ -5,3 +5,5 @@ __pycache__/
 .pytest_cache/
 .venv/
 .streamlit/
+# Generated regression tests written by the pipeline at runtime
+tests/demo_project/tests/regression/
