@@ -23,8 +23,9 @@ class Evidence(BaseModel):
     """A piece of supporting evidence collected during analysis."""
 
     source: Literal["log", "git", "code", "test"]
-    description: str
-    detail: str = ""
+    location: str # Where in the codebase/log/history (e.g. "app/views.py:42", "commit abc1234")
+    observation: str  # What was found (the raw fact)
+    relevance : str  # Why it matters to the root cause
 
 
 class RegressionTest(BaseModel):
