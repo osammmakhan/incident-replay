@@ -22,9 +22,7 @@ class CheckoutService:
         BUG: order.discount may be None when the field is omitted from the
         request payload; the min() call raises TypeError in that case.
         """
-        discount_rate = order.discount or 0.0
-        discount_rate = max(0.0, min(discount_rate, self.MAX_DISCOUNT_RATE))
-
+        discount_rate = max(0.0, min(order.discount, self.MAX_DISCOUNT_RATE))
         return discount_rate
 
     def total(self, order):
